@@ -382,7 +382,7 @@
       </header>
 
       <section id="messages" class="messages" aria-live="polite">
-        <div class="empty">Send a prompt to start chatting with your API on localhost:8000.</div>
+        <div class="empty">Send a prompt to start chatting with your API.</div>
       </section>
 
       <form id="chatForm" class="composer" action="javascript:void(0);" onsubmit="return false;">
@@ -400,7 +400,15 @@
   </main>
 
   <script>
-    const API_BASE_CANDIDATES = ["http://localhost:8000", "http://127.0.0.1:8000"];
+    const RENDER_API_BASE = "https://ai-chat-wt78.onrender.com";
+    const localApiCandidates = ["http://localhost:8000", "http://127.0.0.1:8000"];
+    const isLocalHost = ["localhost", "127.0.0.1", "[::1]"].includes(window.location.hostname);
+    const apiOverride = window.localStorage.getItem("apiBaseUrlOverride");
+    const API_BASE_CANDIDATES = apiOverride && apiOverride.trim()
+      ? [apiOverride.trim()]
+      : isLocalHost
+        ? localApiCandidates
+        : [RENDER_API_BASE];
 
     const historyEl = document.getElementById("history");
     const messagesEl = document.getElementById("messages");
