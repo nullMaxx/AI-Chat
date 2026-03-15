@@ -1,0 +1,634 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Gemini Local Chat</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap"
+    rel="stylesheet"
+  />
+  <style>
+    :root {
+      --bg: #f4f0e8;
+      --panel: #fffaf0;
+      --ink: #1e1e1e;
+      --muted: #625a50;
+      --line: #d2c2ac;
+      --brand: #ec6f2d;
+      --brand-2: #1a8f7a;
+      --danger: #ab2f1f;
+      --user-bubble: #ffe7cf;
+      --ai-bubble: #e3f7ef;
+      --shadow: 0 16px 38px rgba(37, 29, 18, 0.16);
+      --radius: 18px;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      height: 100%;
+      margin: 0;
+    }
+
+    body {
+      font-family: "Space Grotesk", sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 15% 15%, #ffd8a6 0%, transparent 30%),
+        radial-gradient(circle at 90% 10%, #c8f0e5 0%, transparent 25%),
+        radial-gradient(circle at 80% 90%, #ffe7ba 0%, transparent 35%),
+        linear-gradient(135deg, #f4f0e8 0%, #efe4d0 100%);
+      overflow: hidden;
+    }
+
+    .grain {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      opacity: 0.15;
+      background-image: radial-gradient(#2b2b2b 0.45px, transparent 0.45px);
+      background-size: 7px 7px;
+      z-index: 0;
+    }
+
+    .layout {
+      position: relative;
+      z-index: 1;
+      display: grid;
+      grid-template-columns: 340px minmax(0, 1fr);
+      gap: 16px;
+      max-width: 1200px;
+      margin: 0 auto;
+      height: 100%;
+      padding: 18px;
+    }
+
+    .panel {
+      background: color-mix(in srgb, var(--panel) 88%, white);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+      animation: rise 520ms ease both;
+    }
+
+    @keyframes rise {
+      from {
+        transform: translateY(14px);
+        opacity: 0;
+      }
+      to {
+        transform: translateY(0);
+        opacity: 1;
+      }
+    }
+
+    .side {
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+    }
+
+    .title {
+      margin: 0;
+      padding: 18px 18px 10px;
+      font-size: 1.25rem;
+      letter-spacing: 0.2px;
+    }
+
+    .subtitle {
+      margin: 0;
+      padding: 0 18px 14px;
+      color: var(--muted);
+      font-size: 0.93rem;
+      border-bottom: 1px dashed var(--line);
+    }
+
+    .history {
+      padding: 10px;
+      overflow: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .history-item {
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 10px;
+      cursor: pointer;
+      transition: transform 120ms ease, border-color 120ms ease;
+    }
+
+    .history-item:hover {
+      transform: translateY(-1px);
+      border-color: var(--brand);
+    }
+
+    .history-item.active {
+      border-color: var(--brand-2);
+      background: #f2fff9;
+    }
+
+    .history-prompt {
+      font-size: 0.88rem;
+      margin: 0 0 6px;
+      color: #3d3a35;
+      line-height: 1.35;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .history-meta {
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 0.75rem;
+      color: var(--muted);
+      margin: 0;
+    }
+
+    .side-actions {
+      display: flex;
+      padding: 10px;
+      border-top: 1px dashed var(--line);
+      gap: 8px;
+    }
+
+    .btn {
+      border: 1px solid var(--line);
+      background: #fff;
+      color: var(--ink);
+      border-radius: 10px;
+      padding: 9px 12px;
+      font-weight: 500;
+      cursor: pointer;
+      font-family: inherit;
+      transition: transform 120ms ease, background-color 120ms ease, border-color 120ms ease;
+    }
+
+    .btn:hover {
+      transform: translateY(-1px);
+      border-color: var(--brand);
+    }
+
+    .btn-primary {
+      background: var(--brand);
+      color: #fff;
+      border-color: transparent;
+    }
+
+    .btn-primary:hover {
+      background: #dd611f;
+    }
+
+    .btn-danger:hover {
+      border-color: var(--danger);
+      color: var(--danger);
+    }
+
+    .chat {
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+    }
+
+    .chat-head {
+      padding: 16px 18px;
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .chat-head h2 {
+      margin: 0;
+      font-size: 1.1rem;
+    }
+
+    .status {
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 0.78rem;
+      color: var(--muted);
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 4px 10px;
+      white-space: nowrap;
+    }
+
+    .status.ok {
+      color: #0f6f57;
+      border-color: #7ecbb6;
+      background: #e9fbf5;
+    }
+
+    .status.err {
+      color: #8e2318;
+      border-color: #efb2ab;
+      background: #fff0ef;
+    }
+
+    .messages {
+      padding: 16px;
+      overflow: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      scroll-behavior: smooth;
+    }
+
+    .msg {
+      max-width: 82%;
+      border-radius: 14px;
+      padding: 10px 12px;
+      border: 1px solid var(--line);
+      line-height: 1.45;
+      animation: pop 240ms ease both;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    @keyframes pop {
+      from {
+        transform: scale(0.985);
+        opacity: 0;
+      }
+      to {
+        transform: scale(1);
+        opacity: 1;
+      }
+    }
+
+    .msg.user {
+      margin-left: auto;
+      background: var(--user-bubble);
+    }
+
+    .msg.ai {
+      margin-right: auto;
+      background: var(--ai-bubble);
+    }
+
+    .composer {
+      border-top: 1px solid var(--line);
+      padding: 12px;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 10px;
+      background: #fff;
+    }
+
+    .composer textarea {
+      width: 100%;
+      min-height: 64px;
+      max-height: 200px;
+      resize: vertical;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 10px 12px;
+      font: inherit;
+      line-height: 1.35;
+      background: #fffdf7;
+      outline: none;
+    }
+
+    .composer textarea:focus {
+      border-color: var(--brand);
+      box-shadow: 0 0 0 3px rgba(236, 111, 45, 0.15);
+    }
+
+    .composer-right {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      min-width: 150px;
+    }
+
+    .hint {
+      margin: 0;
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 0.74rem;
+      color: var(--muted);
+      text-align: center;
+    }
+
+    .empty {
+      border: 1px dashed var(--line);
+      border-radius: 12px;
+      padding: 14px;
+      color: var(--muted);
+      background: #fffcf4;
+      font-size: 0.9rem;
+    }
+
+    @media (max-width: 960px) {
+      body {
+        overflow: auto;
+      }
+
+      .layout {
+        height: auto;
+        min-height: 100%;
+        grid-template-columns: 1fr;
+      }
+
+      .side {
+        max-height: 42vh;
+      }
+
+      .chat {
+        min-height: 62vh;
+      }
+
+      .composer {
+        grid-template-columns: 1fr;
+      }
+
+      .composer-right {
+        min-width: 0;
+      }
+
+      .msg {
+        max-width: 92%;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="grain"></div>
+
+  <main class="layout">
+    <aside class="panel side">
+      <div>
+        <h1 class="title">Prompt Archive</h1>
+        <p class="subtitle">Requests from your current IP via GET /requests</p>
+      </div>
+      <section id="history" class="history" aria-live="polite"></section>
+      <div class="side-actions">
+        <button id="refreshBtn" class="btn" type="button">Refresh</button>
+        <button id="clearViewBtn" class="btn btn-danger" type="button">Clear View</button>
+      </div>
+    </aside>
+
+    <section class="panel chat">
+      <header class="chat-head">
+        <h2>Gemini Local Chat</h2>
+        <div id="status" class="status">idle</div>
+      </header>
+
+      <section id="messages" class="messages" aria-live="polite">
+        <div class="empty">Send a prompt to start chatting with your API on localhost:8000.</div>
+      </section>
+
+      <form id="chatForm" class="composer" action="javascript:void(0);" onsubmit="return false;">
+        <textarea
+          id="promptInput"
+          placeholder="Type your prompt here..."
+          required
+        ></textarea>
+        <div class="composer-right">
+          <button id="sendBtn" class="btn btn-primary" type="submit">Send Prompt</button>
+          <p class="hint">Enter sends, Shift+Enter makes a new line.</p>
+        </div>
+      </form>
+    </section>
+  </main>
+
+  <script>
+    const API_BASE_CANDIDATES = ["http://localhost:8000", "http://127.0.0.1:8000"];
+
+    const historyEl = document.getElementById("history");
+    const messagesEl = document.getElementById("messages");
+    const statusEl = document.getElementById("status");
+    const chatForm = document.getElementById("chatForm");
+    const promptInput = document.getElementById("promptInput");
+    const sendBtn = document.getElementById("sendBtn");
+    const refreshBtn = document.getElementById("refreshBtn");
+    const clearViewBtn = document.getElementById("clearViewBtn");
+    let selectedHistoryId = null;
+
+    async function apiFetch(path, options = {}) {
+      let lastError = null;
+
+      for (const base of API_BASE_CANDIDATES) {
+        try {
+          return await fetch(`${base}${path}`, options);
+        } catch (error) {
+          lastError = error;
+        }
+      }
+
+      throw new Error(
+        `Could not connect to API on ${API_BASE_CANDIDATES.join(" or ")}. ` +
+        `Make sure FastAPI is running and CORS allows your frontend origin. ` +
+        `${lastError && lastError.message ? lastError.message : "Network error."}`
+      );
+    }
+
+    function setStatus(text, type = "") {
+      statusEl.textContent = text;
+      statusEl.classList.remove("ok", "err");
+      if (type) {
+        statusEl.classList.add(type);
+      }
+    }
+
+    function ensureNotEmptyStateRemoved() {
+      const empty = messagesEl.querySelector(".empty");
+      if (empty) {
+        empty.remove();
+      }
+    }
+
+    function addMessage(role, text) {
+      ensureNotEmptyStateRemoved();
+      const div = document.createElement("div");
+      div.className = `msg ${role}`;
+      div.textContent = text;
+      messagesEl.appendChild(div);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+
+    function setActiveHistoryCard(chatId) {
+      const cards = historyEl.querySelectorAll(".history-item");
+      cards.forEach((card) => {
+        card.classList.toggle("active", chatId !== null && card.dataset.chatId === String(chatId));
+      });
+    }
+
+    function openHistoryChat(entry) {
+      selectedHistoryId = entry.id;
+      setActiveHistoryCard(selectedHistoryId);
+      messagesEl.innerHTML = "";
+      addMessage("user", entry.prompt || "(empty prompt)");
+      if (entry.response) {
+        addMessage("ai", entry.response);
+      }
+      setStatus(`opened chat #${entry.id}`, "ok");
+    }
+
+    function addTyping() {
+      ensureNotEmptyStateRemoved();
+      const div = document.createElement("div");
+      div.className = "msg ai";
+      div.id = "typingMsg";
+      div.textContent = "Thinking...";
+      messagesEl.appendChild(div);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+
+    function removeTyping() {
+      const typing = document.getElementById("typingMsg");
+      if (typing) {
+        typing.remove();
+      }
+    }
+
+    function normalizeHistoryItem(item, index) {
+      if (typeof item === "string") {
+        return {
+          id: index + 1,
+          prompt: item,
+          response: ""
+        };
+      }
+      return {
+        id: item && item.id != null ? item.id : index + 1,
+        prompt: item && item.prompt != null ? item.prompt : "",
+        response: item && item.response != null ? item.response : ""
+      };
+    }
+
+    function renderHistory(items) {
+      historyEl.innerHTML = "";
+
+      if (!items.length) {
+        historyEl.innerHTML = '<div class="empty">No requests yet for this IP.</div>';
+        return;
+      }
+
+      const normalized = items.map(normalizeHistoryItem).reverse();
+
+      normalized.forEach((entry) => {
+        const card = document.createElement("article");
+        card.className = "history-item";
+        card.dataset.chatId = String(entry.id);
+        card.innerHTML = `
+          <p class="history-prompt">${escapeHtml(entry.prompt || "(empty prompt)")}</p>
+          <p class="history-meta">id: ${escapeHtml(String(entry.id))}</p>
+        `;
+
+        card.addEventListener("click", () => {
+          openHistoryChat(entry);
+        });
+
+        historyEl.appendChild(card);
+      });
+
+      setActiveHistoryCard(selectedHistoryId);
+    }
+
+    function escapeHtml(text) {
+      const value = String(text);
+      return value
+        .split("&").join("&amp;")
+        .split("<").join("&lt;")
+        .split(">").join("&gt;")
+        .split('"').join("&quot;")
+        .split("'").join("&#039;");
+    }
+
+    async function loadHistory() {
+      setStatus("loading history...");
+      try {
+        const response = await apiFetch("/requests");
+        if (!response.ok) {
+          throw new Error(`GET /requests failed with status ${response.status}`);
+        }
+
+        const data = await response.json();
+        renderHistory(Array.isArray(data) ? data : []);
+        setStatus("history loaded", "ok");
+      } catch (error) {
+        setStatus("history error", "err");
+        historyEl.innerHTML = `<div class="empty">${escapeHtml(error.message)}</div>`;
+      }
+    }
+
+    async function sendPrompt(prompt) {
+      setStatus("sending...");
+      sendBtn.disabled = true;
+
+      if (selectedHistoryId !== null) {
+        selectedHistoryId = null;
+        setActiveHistoryCard(null);
+        messagesEl.innerHTML = "";
+      }
+
+      addMessage("user", prompt);
+      addTyping();
+
+      try {
+        const response = await apiFetch("/requests", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({ prompt })
+        });
+
+        if (!response.ok) {
+          throw new Error(`POST /requests failed with status ${response.status}`);
+        }
+
+        const data = await response.json();
+        removeTyping();
+        addMessage("ai", data && data.data != null ? data.data : "No data field returned by API.");
+        setStatus("response received", "ok");
+        await loadHistory();
+      } catch (error) {
+        removeTyping();
+        addMessage("ai", `Error: ${error && error.message ? error.message : "Unknown error"}`);
+        setStatus("request error", "err");
+      } finally {
+        sendBtn.disabled = false;
+      }
+    }
+
+    chatForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const prompt = promptInput.value.trim();
+      if (!prompt) {
+        return;
+      }
+
+      promptInput.value = "";
+      await sendPrompt(prompt);
+      promptInput.focus();
+    });
+
+    promptInput.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" && !event.shiftKey) {
+        event.preventDefault();
+        chatForm.requestSubmit();
+      }
+    });
+
+    refreshBtn.addEventListener("click", loadHistory);
+
+    clearViewBtn.addEventListener("click", () => {
+      selectedHistoryId = null;
+      setActiveHistoryCard(null);
+      messagesEl.innerHTML = '<div class="empty">Conversation view cleared. History on the left is untouched.</div>';
+      setStatus("view cleared");
+    });
+
+    loadHistory();
+  </script>
+</body>
+</html>
