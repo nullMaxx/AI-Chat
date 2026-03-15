@@ -1,7 +1,8 @@
 from contextlib import asynccontextmanager
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
 import os
 
-from fastapi import FastAPI, Body, Request
+from fastapi import FastAPI, Body, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from db import Base, add_request_data, engine, get_user_requests
@@ -18,6 +19,10 @@ app = FastAPI(
     title="Gemini API FastAPI Example",
     lifespan=lifespan,
 )
+
+
+GEMINI_TIMEOUT_SECONDS = int(os.getenv("GEMINI_TIMEOUT_SECONDS", "45"))
+gemini_executor = ThreadPoolExecutor(max_workers=2)
 
 
 def get_allowed_origins() -> list[str]:
@@ -69,7 +74,23 @@ def send_prompt(
     prompt: str = Body(embed=True),
 ):
     user_ip_address = request.client.host if request.client else "unknown"
-    answer = get_answer_from_gemini(prompt)
+
+    try:
+        future = gemini_executor.submit(get_answer_from_gemini, prompt)
+        answer = future.result(timeout=GEMINI_TIMEOUT_SECONDS)
+    except FutureTimeoutError as exc:
+        raise HTTPException(
+            status_code=504,
+            detail=(
+                "Gemini response timeout. Try again or reduce prompt size."
+            ),
+        ) from exc
+    except Exception as exc:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Gemini request failed: {str(exc)}",
+        ) from exc
+
     add_request_data(
         ip_address=user_ip_address,
         prompt=prompt,

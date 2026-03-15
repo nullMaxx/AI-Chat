@@ -422,19 +422,34 @@
 
     async function apiFetch(path, options = {}) {
       let lastError = null;
+      const timeoutMs = Number.isFinite(options.timeoutMs) ? options.timeoutMs : 30000;
+      const requestOptions = { ...options };
+      delete requestOptions.timeoutMs;
 
       for (const base of API_BASE_CANDIDATES) {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
         try {
-          return await fetch(`${base}${path}`, options);
+          return await fetch(`${base}${path}`, {
+            ...requestOptions,
+            signal: controller.signal
+          });
         } catch (error) {
           lastError = error;
+        } finally {
+          clearTimeout(timeoutId);
         }
       }
+
+      const timeoutHint = lastError && lastError.name === "AbortError"
+        ? ` Request timed out after ${timeoutMs}ms.`
+        : "";
 
       throw new Error(
         `Could not connect to API on ${API_BASE_CANDIDATES.join(" or ")}. ` +
         `Make sure FastAPI is running and CORS allows your frontend origin. ` +
-        `${lastError && lastError.message ? lastError.message : "Network error."}`
+        `${lastError && lastError.message ? lastError.message : "Network error."}${timeoutHint}`
       );
     }
 
@@ -554,7 +569,7 @@
     async function loadHistory() {
       setStatus("loading history...");
       try {
-        const response = await apiFetch("/requests");
+        const response = await apiFetch("/requests", { timeoutMs: 10000 });
         if (!response.ok) {
           throw new Error(`GET /requests failed with status ${response.status}`);
         }
@@ -584,6 +599,7 @@
       try {
         const response = await apiFetch("/requests", {
           method: "POST",
+          timeoutMs: 60000,
           headers: {
             "Content-Type": "application/json"
           },
